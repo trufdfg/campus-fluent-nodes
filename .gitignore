@@ -1,0 +1,9 @@
+# 私钥、本机设置绝不提交
+wb_nodes
+wb_nodes.pub
+id_*
+*.pem
+*.key
+.campus_nodes.json
+__pycache__/
+*.pyc
