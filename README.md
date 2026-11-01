@@ -1,8 +1,8 @@
 # campus-fluent-nodes
 
-一个 Claude Code / Codex skill：在自己的电脑上，通过 SSH 使用校园网里的三台 Windows 计算从机（`n5950x`、`limian`、`menkou`）跑 Fluent。功能包括检查连通、传文件、后台开算、查看和停止任务、取回结果。
+一个 Claude Code / Codex skill：在自己的电脑上，通过 SSH 使用校园网里的三台 Windows 计算从机（`n5950x`、`limian`、`menkou`）跑 Fluent 或其他软件。功能包括检查连通、传文件、后台开算、查看和停止任务、取回结果。
 
-**本仓库不含任何密钥或密码。** 登录从机用的私钥 `wb_nodes` 由 sjh 单独发给你，不要提交到任何仓库。
+**本仓库不含任何密钥或密码。** 登录从机用的私钥每人一把（`wb_nodes`、`fpk_nodes`），由 sjh 单独发给你，不要提交到任何仓库。
 
 ## 安装
 
@@ -21,7 +21,7 @@ git clone https://github.com/trufdfg/campus-fluent-nodes "$env:USERPROFILE\.code
 
 ## 部署
 
-先把 sjh 发的 `wb_nodes` 放到 `%USERPROFILE%\.ssh\wb_nodes`，然后打开 Claude Code 或 Codex，对它说"部署从机"。它会按 [SKILL.md](SKILL.md) 一步步做：
+先把 sjh 发的私钥文件放进 `%USERPROFILE%\.ssh\`，不要改文件名，然后打开 Claude Code 或 Codex，对它说"部署从机"。它会按 [SKILL.md](SKILL.md) 一步步做：
 
 1. 检查 Python 和 ssh；
 2. 生成连接配置（`node.py refresh`）；

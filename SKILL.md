@@ -1,9 +1,9 @@
 ---
 name: campus-fluent-nodes
-description: 通过 SSH 使用校园网内的三台计算从机（n5950x、limian、menkou）跑 Fluent，包括首次部署（放私钥、检查连通、确认每台的文件保存地址）、传文件、后台开算、查看和停止任务、取回结果。用户提到这三台从机、"部署从机"、在从机上跑 Fluent 或往从机派任务时使用。
+description: 通过 SSH 使用校园网内的三台计算从机（n5950x、limian、menkou）跑 Fluent 或其他软件，包括首次部署（放私钥、检查连通、确认每台的文件保存地址）、传文件、后台开算、查看和停止任务、取回结果。用户提到这三台从机、"部署从机"、在从机上跑计算或往从机派任务时使用。
 ---
 
-# 校园网计算从机（Fluent）
+# 校园网计算从机
 
 工具是本 skill 目录下的 `scripts/node.py`，只用 Python 标准库（3.8+），通过系统自带的 `ssh` / `scp` 连接从机。下文的 `node.py` 都指它，调用时写完整路径，例如 `python "<本 skill 目录>\scripts\node.py" check`。如果 `python` 命令不可用，改用 `py -3`。
 
@@ -13,17 +13,17 @@ description: 通过 SSH 使用校园网内的三台计算从机（n5950x、limia
 |---|---|---|---|---|
 | `n5950x` | Ryzen 9 5950X 16 核，64 GB | 2024 R1 | normal | 有时有别人的程序占一部分 CPU |
 | `limian` | Ultra 9 285K 24 核，96 GB | 2024 R1 | **idle** | 别人的 DMol3 以 idle 优先级占满 24 核 |
-| `menkou` | Ultra 9 285K 24 核，96 GB | **2022 R1** | normal | 别人的 DMol3 以 idle 优先级占满 24 核 |
+| `menkou` | Ultra 9 285K 24 核，96 GB | **2022 R1** | normal | 别人的 DMol3 和虚拟机占掉不少 CPU 和内存，DMol3 可能是 normal 优先级 |
 
 ## 第一次使用：部署
 
 按顺序做，每一步确认结果再做下一步。目标是让三台都能接通，并且每台的文件保存地址都由用户确认过。
 
 1. **检查环境。** 运行 `python --version`（要 3.8 或更高）和 `ssh -V`（要能显示版本号）。没有 ssh 的话，让用户在"设置 > 系统 > 可选功能"里装上"OpenSSH 客户端"。
-2. **放好私钥。** 确认 `%USERPROFILE%\.ssh\wb_nodes` 存在。不存在就请用户把 sjh 私下发的 `wb_nodes` 文件（没有扩展名）放进去：
+2. **放好私钥。** sjh 给每人一把私钥，文件名是 `<名字>_nodes`（`wb_nodes`、`fpk_nodes`，没有扩展名），`node.py` 按 `%USERPROFILE%\.ssh\` 里有哪一把来判断使用者是谁。确认它在这个文件夹里，不在就请用户把 sjh 私下发的文件放进去，不要改文件名：
    ```powershell
    New-Item -ItemType Directory -Force "$env:USERPROFILE\.ssh" | Out-Null
-   Copy-Item "<用户存放 wb_nodes 的位置>\wb_nodes" "$env:USERPROFILE\.ssh\wb_nodes"
+   Copy-Item "<用户存放私钥的位置>\<名字>_nodes" "$env:USERPROFILE\.ssh\"
    ```
    **不要读取、打印或复制私钥的内容，也不要把它放进任何仓库或公开的地方。**
 3. **生成连接配置：** `python node.py refresh`。它按计算机名找到三台的 IP，写进 `~/.ssh/config` 里 `# >>> campus nodes` 到 `# <<< campus nodes` 之间的部分，不动其他内容。
@@ -33,9 +33,9 @@ description: 通过 SSH 使用校园网内的三台计算从机（n5950x、limia
    - 从机拒绝了私钥：私钥文件不对，请用户联系 sjh。
 5. **确认每台的文件保存地址。** 运行 `python node.py roots`，它会列出每台建议的文件夹、是否已经存在、里面有多少项、所在盘还剩多少空间。**逐台问用户**（有提问工具就用提问工具，每台一个问题）：用建议的地址，还是换一个。问的时候把 `roots` 列出的情况一起告诉用户。用户确认后逐台写入：
    ```powershell
-   python node.py roots --set n5950x "C:\Users\Admin\Desktop\WB"
-   python node.py roots --set limian "E:\WB"
-   python node.py roots --set menkou "E:\WB"
+   python node.py roots --set n5950x "C:\Users\Admin\Desktop\<名字>"
+   python node.py roots --set limian "E:\<名字>"
+   python node.py roots --set menkou "E:\<名字>"
    ```
    引号里换成用户确认的路径。设置保存在 `%USERPROFILE%\.campus_nodes.json`。三台都设好之前，`push`、`fluent`、`status` 等命令会拒绝执行。不能选 sjh 文件夹，也不要选别人的文件夹。
 6. **收尾：** 运行 `python node.py info`，把三台的 CPU、内存、磁盘情况告诉用户，部署完成。
@@ -57,6 +57,21 @@ python node.py stop n5950x xielou/case15                     # 中途停掉
 - `fluent` 实际执行的是 `fluent 3ddp -g -t<核数> -i model\<journal> -wait`。`--np` 不写就用满这台的核数，`--dim` 可选 `2d`、`2ddp`、`3d`、`3ddp`。任务进程不属于 SSH 会话，断网也不影响计算。
 - 同一个任务还在跑时不能再启动，要先 `stop` 或换个任务名。
 - 其他命令：`run`（后台跑任意命令行，`.bat` 一定要用它），`ps`（在从机上执行一段 PowerShell）。
+
+## 跑 Fluent 以外的软件
+
+`fluent` 命令只管 Fluent，其他软件用 `run`，先确认从机上装了：
+
+```powershell
+python node.py ps n5950x "Get-ChildItem 'C:\Program Files', 'C:\ANSYS' | Select-Object FullName"   # 看装了什么
+python node.py push n5950x D:\cases\my.bat xielou/test     # 把脚本传到 model\
+python node.py run n5950x xielou/test "model\my.bat"       # 后台跑，输出写进 logs\run.log
+python node.py status n5950x xielou/test
+```
+
+- 工作目录是任务目录，`status`、`stop`、`pull` 的用法和 Fluent 一样。优先级默认按上表，`limian` 仍然只用 idle。
+- 程序要能在后台自己跑完：用批处理或命令行模式，不弹窗，不等键盘输入。从机上看不到它的窗口，卡住了只能 `stop`。
+- 从机上没装的软件不要自己装（约定第 5 条），找 sjh。
 
 ## 写 journal
 

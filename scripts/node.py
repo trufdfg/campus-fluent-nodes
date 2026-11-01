@@ -2,7 +2,7 @@ r"""校园网计算从机小工具：按计算机名找三台从机，检查连�
 
 只用 Python 标准库（3.8+），靠系统自带的 ssh / scp。
 用之前（部署，详见 SKILL.md）：
-  1. 私钥放到 ~/.ssh/wb_nodes（找 sjh 私下要，不要放进任何仓库）
+  1. 私钥放到 ~/.ssh/（找 sjh 私下要，每人一把：wb_nodes、fpk_nodes。不要改文件名，不要放进任何仓库）
   2. python node.py refresh            按计算机名找到从机 IP，写进 ~/.ssh/config
   3. python node.py check              逐台检查能不能接通
   4. python node.py roots              看每台建议的文件保存地址；确认后
@@ -42,7 +42,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-KEY = Path.home() / ".ssh" / "wb_nodes"
+USERS = ("wb", "fpk")   # 每人一把私钥 ~/.ssh/<名字>_nodes，本机有哪一把就按谁算
+ME = next((u for u in USERS if (Path.home() / ".ssh" / f"{u}_nodes").exists()), USERS[0])
+KEY = Path.home() / ".ssh" / f"{ME}_nodes"
 SSH_CONFIG = Path.home() / ".ssh" / "config"
 CONFIG = Path.home() / ".campus_nodes.json"   # 本机设置：各从机的文件保存地址
 LAN = ipaddress.ip_network("172.24.80.0/20")   # 从机所在的校园网 Wi-Fi 网段
@@ -52,16 +54,16 @@ DEFAULT_PROJECT = "未分类"
 
 NODES = {
     # 有别人的程序时会占掉一部分 CPU，派任务前先 info 看占用
-    "n5950x": dict(host="DESKTOP-1E0VORE", user="Admin", cores=16, prio="normal", suggest=r"C:\Users\Admin\Desktop\WB",
+    "n5950x": dict(host="DESKTOP-1E0VORE", user="Admin", cores=16, prio="normal", suggest=rf"C:\Users\Admin\Desktop\{ME.upper()}",
                    version="2024 R1", fluent=r"C:\ANSYS\2024 R1\v241\fluent\ntbin\win64\fluent.exe", ip="172.24.95.50"),
     # 里面那台。有别人的 DMol3 以 Idle 优先级占满 24 核。约定：只用 idle 优先级，和它平分，不要用 below/normal 去抢
-    "limian": dict(host="DESKTOP-POHVFB3", user="Administrator", cores=24, prio="idle", suggest=r"E:\WB",
+    "limian": dict(host="DESKTOP-POHVFB3", user="Administrator", cores=24, prio="idle", suggest=rf"E:\{ME.upper()}",
                    version="2024 R1", fluent=r"D:\ANSYS2024\ANSYS Inc\v241\fluent\ntbin\win64\fluent.exe", ip="172.24.88.190"),
-    # 门口那台。也有别人的 DMol3（Idle 优先级），这台约定用 normal。Fluent 是 2022 R1，打不开 2024 R1 存的 case
-    "menkou": dict(host="DESKTOP-2HU6S6M", user="Administrator", cores=24, prio="normal", suggest=r"E:\WB",
-                   version="2022 R1", fluent=r"D:\Program Files\ANSYS Inc\v221\fluent\ntbin\win64\fluent.exe", ip="172.24.94.237"),
+    # 门口那台。也有别人的 DMol3（2026-11-01 是 Normal 优先级）和虚拟机，这台约定用 normal。Fluent 是 2022 R1，打不开 2024 R1 存的 case
+    "menkou": dict(host="DESKTOP-2HU6S6M", user="Administrator", cores=24, prio="normal", suggest=rf"E:\{ME.upper()}",
+                   version="2022 R1", fluent=r"D:\Program Files\ANSYS Inc\v221\fluent\ntbin\win64\fluent.exe", ip="172.24.93.135"),
 }
-# ip 是 2026-10-29 的地址，只在按计算机名解析不到、~/.ssh/config 里也没有时兜底用
+# ip 是 2026-11-01 的地址，只在按计算机名解析不到、~/.ssh/config 里也没有时兜底用
 
 # 读日志末尾：共享读（Fluent 正在写也能读），先按 UTF-8 解码，不行再按系统编码（GBK）
 PS_TAIL = """
@@ -129,7 +131,7 @@ def refresh():
         ip = resolve(n["host"]) or prev.get(alias) or n.get("ip")
         print(f"{alias:7s} {n['host']:16s} -> {ip}")
         blocks.append(f"Host {alias}\n    HostName {ip}\n    HostKeyAlias {n['host']}\n    User {n['user']}")
-    blocks.append(f"Host {' '.join(NODES)}\n    IdentityFile ~/.ssh/wb_nodes\n    IdentitiesOnly yes\n"
+    blocks.append(f"Host {' '.join(NODES)}\n    IdentityFile ~/.ssh/{KEY.name}\n    IdentitiesOnly yes\n"
                   "    StrictHostKeyChecking accept-new\n    ConnectTimeout 10\n"
                   "    ServerAliveInterval 30\n    LogLevel ERROR")
     blocks.append("# <<< campus nodes")
@@ -143,7 +145,7 @@ def check():
     if KEY.exists():
         print(f"✓ 私钥 {KEY}")
     else:
-        print(f"✗ 没有私钥 {KEY}：找 sjh 要 wb_nodes 文件，放到这个位置")
+        print(f"✗ 没有私钥：找 sjh 要你的私钥文件（{' 或 '.join(u + '_nodes' for u in USERS)}），放进 {KEY.parent}")
         good = False
     if not shutil.which("ssh"):
         print("✗ 找不到 ssh 命令：Windows 设置 > 系统 > 可选功能 里装上 OpenSSH 客户端")
@@ -209,8 +211,8 @@ def roots(node=None, path=None):
         p = path.replace("/", "\\").rstrip("\\")
         if not re.match(r"^[A-Za-z]:\\.+", p):
             sys.exit(f"路径要写成从机上的完整路径，例如 {NODES[node]['suggest']}，不能只写盘符")
-        if p.split("\\")[-1].lower() == "sjh":
-            sys.exit("sjh 文件夹是 sjh 自己的，换一个")
+        if p.split("\\")[-1].lower() in {"sjh", *USERS} - {ME}:
+            sys.exit(f"{p} 是别人的文件夹，换一个")
         have[node] = p
         CONFIG.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"{node} 的文件保存地址设为 {p}")

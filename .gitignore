@@ -1,6 +1,6 @@
 # 私钥、本机设置绝不提交
-wb_nodes
-wb_nodes.pub
+*_nodes
+*_nodes.pub
 id_*
 *.pem
 *.key
